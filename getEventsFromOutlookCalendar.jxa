@@ -1,0 +1,122 @@
+//version 0.0.1
+
+var app = Application.currentApplication();
+app.includeStandardAdditions = true;
+var calendarApp = Application("Microsoft Outlook");
+var endDate = new Date();
+var startDate = new Date(endDate);
+startDate.setDate(startDate.getDate() - 30 /* days */); // go back x # of days
+
+//Function parameters:
+// 1 Calendar name
+// 2 index if there is more than one calendar with the same name
+// 3 Only extract events from a particular category Or Null for all
+// 4 start Date
+// 5 end Date
+// 6 rule number to parse subject
+// 7 output - pass 'csv' to get a csv formatted output 
+// example to extract from a calender named "Calendar" where two exists and we want to get from the second one just the events Categorized as "Altice"    
+// 		getEventsFromCalendar('Calendar',1,'Altice',startDate,endDate,1);
+// example to get all events with no parsing and structure the output as CSV 
+// 		getEventsFromCalendar('Calendar',1,null,startDate,endDate,0,'csv');
+
+//Parse Rules
+//0 : no rule
+//1 : Custumer Name | Activity Type | description
+//2 : Customer Name // description
+//3 : Customer Name : description
+//4 : Customer Name - description
+
+getEventsFromCalendar('Calendar',1,'Customer',startDate,endDate,0,'csv');
+
+function getEventsFromCalendar(calendarName,idxArr,category,startDate,endDate,parseRule,output) {
+
+	var currentCalendar = calendarApp.calendars.whose({ name: calendarName })[idxArr];
+	try {
+		currentCalendar.get();
+	} catch (e) {
+		app.displayAlert('Could not find a calendar with name "' + calendarName + '".\n\nPlease make sure a calendar with that name exists, change the calendar name or array index.');
+		return;
+	}
+	
+	var events = currentCalendar.calendarEvents.whose({
+		_and: [
+			{ startTime: { _greaterThan: startDate } },
+			{ endTime: { _lessThan: endDate } }
+		]
+	})();
+	
+	var evtArr = [];
+
+	for (var event of events) {
+		if (event.allDayFlag()) continue;
+		var eventStartDate = event.startTime();
+		var eventEndDate = event.endTime();
+		var duration = Math.abs(eventEndDate - eventStartDate) / 36e5;
+		if ((eventEndDate - eventStartDate) / 1000 >= 23 * 60 * 60) continue;
+		
+		//Parse subject
+		var customer = '';
+		var activityType = '';
+		var activityDescription = event.subject()
+		switch (parseRule) {
+			case 1:
+				var arrSubject = activityDescription.split('|');
+				customer = arrSubject[0];
+				activityType = arrSubject[1];
+				activityDescription = arrSubject[2];
+				break;
+			case 2:
+				var arrSubject = activityDescription.split('//');
+				customer = arrSubject[0];
+				activityDescription = arrSubject[1];
+				break;
+			case 3:
+				var arrSubject = activityDescription.split(':');
+				customer = arrSubject[0];
+				activityDescription = arrSubject[1];
+				break;
+			case 4:
+				var arrSubject = activityDescription.split('-');
+				customer = arrSubject[0];
+				activityDescription = arrSubject[1];
+				break;
+			default:
+				// no parse Rule
+		}
+
+		if(category == null)
+		{
+			evtArr.push({customer:customer.trim(), activityType:activityType.trim(), activityDescription: activityDescription.trim(), date: eventStartDate.toDateString(), duration_h: duration});
+		}
+		else
+		{
+			var cat = event.category()
+			if (cat.length < 1) continue;
+			cat = event.category()[0].name();
+			if ( cat == category ) {
+				evtArr.push({customer:customer.trim(), activityType:activityType.trim(),  activityDescription: activityDescription.trim(), date: eventStartDate.toDateString(), duration_h: duration, category: cat });
+			}
+		}
+			
+	}
+	if(evtArr.length < 1 ) return "No results"
+	if(output == 'csv'){
+		return csv(evtArr);
+	}
+	return evtArr;
+}
+
+
+function csv(json){
+
+		const items = json
+		const replacer = (key, value) => value === null ? '' : value // specify how you want to handle null values here
+		const header = Object.keys(items[0])
+		const csv = [
+		header.join(','), // header row first
+		...items.map(row => header.map(fieldName => JSON.stringify(row[fieldName], replacer)).join(','))
+		].join('\r\n')
+		return csv
+}
+
