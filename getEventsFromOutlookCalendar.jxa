@@ -27,7 +27,7 @@ startDate.setDate(startDate.getDate() - 30 /* days */); // go back x # of days
 //3 : Customer Name : description
 //4 : Customer Name - description
 
-getEventsFromCalendar('Calendar',1,'Customer',startDate,endDate,0,'csv');
+getEventsFromCalendar('Calendar',1,'CFA',startDate,endDate,0,'csv');
 
 function getEventsFromCalendar(calendarName,idxArr,category,startDate,endDate,parseRule,output) {
 
